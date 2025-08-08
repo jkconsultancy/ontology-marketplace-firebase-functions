@@ -1,0 +1,4 @@
+firebase-functions
+firebase-admin
+neo4j
+python-dotenv
