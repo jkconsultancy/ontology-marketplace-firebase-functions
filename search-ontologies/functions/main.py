@@ -59,7 +59,7 @@ def search_ontologies(req: https_fn.Request) -> https_fn.Response:
                     MATCH (u:User {firebase_uid: $user_uid})
                     MATCH (o:Ontology)
                     WHERE ( (u)-[:CREATED]->(o) ) OR ( o.is_public IS NOT NULL AND o.is_public = true )
-                    RETURN elementId(o) AS node_id, o.name AS name, o.description AS description, o.is_public AS is_public, o.source_url AS source_url, o.image_url AS image_url
+                    RETURN elementId(o) AS node_id, o.name AS name, o.description AS description, o.is_public AS is_public, o.source_url AS source_url, o.image_url AS image_url, o.uuid AS uuid
                     """,
                     user_uid=user_uid,
                 )
@@ -75,6 +75,7 @@ def search_ontologies(req: https_fn.Request) -> https_fn.Response:
                         "is_public": record["is_public"],
                         "source_url": record.get("source_url"),
                         "image_url": record.get("image_url"),
+                        "uuid": record.get("uuid"),
                     }
                     for record in result
                 ]

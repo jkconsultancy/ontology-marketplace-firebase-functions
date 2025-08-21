@@ -31,20 +31,15 @@ app = initialize_app()
 
 
 @https_fn.on_request()
-def add_ontology(req: https_fn.Request) -> https_fn.Response:
+def update_ontology(req: https_fn.Request) -> https_fn.Response:
     """
-    Firebase HTTPS function to add an ontology node to Neo4j.
-    Expects JSON payload with 'name', 'description', and optional 'properties'.
-    Also merges a node for the authenticated user and creates a relationship to the ontology.
+    Firebase HTTPS function to update an ontology node in Neo4j.
+    Expects JSON payload with 'uuid', and 'properties' - dictionary of changes to make.
     """
     try:
         data = req.get_json(force=True)
-        name = data.get("name")
-        description = data.get("description")
+        uuid = data.get("uuid")
         properties = data.get("properties", {})
-
-        # add a uuid property
-        properties["uuid"] = str(uuid.uuid4())
 
         # Get Firebase Auth UID from headers
         auth_header = req.headers.get("Authorization")
@@ -57,37 +52,39 @@ def add_ontology(req: https_fn.Request) -> https_fn.Response:
         # Verify Firebase ID token
         try:
             decoded_token = auth.verify_id_token(id_token)
-            user_uid = decoded_token["uid"]
+            _ = decoded_token["uid"]
         except Exception as e:
             return https_fn.Response(f"Invalid token: {str(e)}", status=401)
 
-        if not name or not description:
+        if not uuid or not properties:
             return https_fn.Response(
-                "Missing 'name' or 'description' in payload.", status=400
+                "Missing 'uuid' or 'properties' in payload.", status=400
             )
 
         driver = get_neo4j_driver()
         with driver.session() as session:
             result = session.run(
                 """
-                MERGE (u:User {firebase_uid: $user_uid})
-                CREATE (o:Ontology {name: $name, description: $description})
+                MATCH (o:Ontology {uuid: $uuid})
                 SET o += $properties
-                CREATE (u)-[:CREATED]->(o)
-                RETURN o.uuid AS uuid, u.firebase_uid AS user_id
+                RETURN o
                 """,
-                user_uid=user_uid,
-                name=name,
-                description=description,
+                uuid=uuid,
                 properties=properties,
             )
             record = result.single()
-            created_uuid = record["uuid"]
-            user_id = record["user_id"]
+            if not record:
+                return https_fn.Response(
+                    f"No ontology found with uuid: {uuid}",
+                    status=404,
+                )
+            print(f"Record: {record}")
+            uuid = record["o"]["uuid"]
+            props = record["o"]
 
-            return https_fn.Response(
-                f"Ontology node created with uuid: {created_uuid} and linked to user ID: {user_id}",
-                status=201,
-            )
+        return https_fn.Response(
+            f"Ontology node updated with uuid: {uuid} with properties: {props}",
+            status=201,
+        )
     except Exception as e:
         return https_fn.Response(f"Error: {str(e)}", status=500)

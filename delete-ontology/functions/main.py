@@ -8,7 +8,6 @@ import google.cloud.firestore
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 import os
-import uuid
 
 # Load environment variables
 load_dotenv()
@@ -31,20 +30,15 @@ app = initialize_app()
 
 
 @https_fn.on_request()
-def add_ontology(req: https_fn.Request) -> https_fn.Response:
+def delete_ontology(req: https_fn.Request) -> https_fn.Response:
     """
-    Firebase HTTPS function to add an ontology node to Neo4j.
-    Expects JSON payload with 'name', 'description', and optional 'properties'.
+    Firebase HTTPS function to delete an ontology node from Neo4j.
+    Expects JSON payload with 'node_id'.
     Also merges a node for the authenticated user and creates a relationship to the ontology.
     """
     try:
         data = req.get_json(force=True)
-        name = data.get("name")
-        description = data.get("description")
-        properties = data.get("properties", {})
-
-        # add a uuid property
-        properties["uuid"] = str(uuid.uuid4())
+        uuid = data.get("uuid")
 
         # Get Firebase Auth UID from headers
         auth_header = req.headers.get("Authorization")
@@ -61,33 +55,35 @@ def add_ontology(req: https_fn.Request) -> https_fn.Response:
         except Exception as e:
             return https_fn.Response(f"Invalid token: {str(e)}", status=401)
 
-        if not name or not description:
+        if not uuid:
             return https_fn.Response(
-                "Missing 'name' or 'description' in payload.", status=400
+                "Missing Ontology 'uuid' in payload.", status=400
             )
 
         driver = get_neo4j_driver()
         with driver.session() as session:
             result = session.run(
                 """
-                MERGE (u:User {firebase_uid: $user_uid})
-                CREATE (o:Ontology {name: $name, description: $description})
-                SET o += $properties
-                CREATE (u)-[:CREATED]->(o)
-                RETURN o.uuid AS uuid, u.firebase_uid AS user_id
+                MATCH (u:User {firebase_uid: $user_uid})-[r:CREATED|OWNS|MANAGES]->(o:Ontology {uuid: $uuid})
+                WITH o, u, o.uuid AS uuid, u.firebase_uid AS user_id
+                DETACH DELETE o
+                RETURN uuid, user_id
                 """,
                 user_uid=user_uid,
-                name=name,
-                description=description,
-                properties=properties,
+                uuid=uuid,
             )
             record = result.single()
-            created_uuid = record["uuid"]
+            if not record:
+                return https_fn.Response(
+                    f"No ontology found with uuid: {uuid}",
+                    status=404,
+                )
+            deleted_uuid = record["uuid"]
             user_id = record["user_id"]
 
-            return https_fn.Response(
-                f"Ontology node created with uuid: {created_uuid} and linked to user ID: {user_id}",
-                status=201,
-            )
+        return https_fn.Response(
+            f"Ontology node deleted with uuid: {deleted_uuid} that was linked to user ID: {user_id}",
+            status=201,
+        )
     except Exception as e:
         return https_fn.Response(f"Error: {str(e)}", status=500)

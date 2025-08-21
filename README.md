@@ -7,7 +7,7 @@
 
 ## Local Testing
 
-CD into the appropriate Functions folder then use the firebase emulator.
+cd into the appropriate Functions folder then use the firebase emulator.
 
 First time run: `firebase init emulators`
 
