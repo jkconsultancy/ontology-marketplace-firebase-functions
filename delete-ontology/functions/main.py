@@ -37,6 +37,17 @@ def delete_ontology(req: https_fn.Request) -> https_fn.Response:
     Also merges a node for the authenticated user and creates a relationship to the ontology.
     """
     try:
+        # CORS preflight
+        cors_headers = {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Max-Age": "3600",
+        }
+
+        if req.method == "OPTIONS":
+            return https_fn.Response("", status=204, headers=cors_headers)
+
         data = req.get_json(force=True)
         uuid = data.get("uuid")
 
@@ -44,7 +55,7 @@ def delete_ontology(req: https_fn.Request) -> https_fn.Response:
         auth_header = req.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return https_fn.Response(
-                "Missing or invalid Authorization header.", status=401
+                "Missing or invalid Authorization header.", status=401, headers=cors_headers
             )
         id_token = auth_header.split("Bearer ")[1]
 
@@ -53,11 +64,11 @@ def delete_ontology(req: https_fn.Request) -> https_fn.Response:
             decoded_token = auth.verify_id_token(id_token)
             user_uid = decoded_token["uid"]
         except Exception as e:
-            return https_fn.Response(f"Invalid token: {str(e)}", status=401)
+            return https_fn.Response(f"Invalid token: {str(e)}", status=401, headers=cors_headers)
 
         if not uuid:
             return https_fn.Response(
-                "Missing Ontology 'uuid' in payload.", status=400
+                "Missing Ontology 'uuid' in payload.", status=400, headers=cors_headers
             )
 
         driver = get_neo4j_driver()
@@ -77,6 +88,7 @@ def delete_ontology(req: https_fn.Request) -> https_fn.Response:
                 return https_fn.Response(
                     f"No ontology found with uuid: {uuid}",
                     status=404,
+                    headers=cors_headers,
                 )
             deleted_uuid = record["uuid"]
             user_id = record["user_id"]
@@ -84,6 +96,7 @@ def delete_ontology(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response(
             f"Ontology node deleted with uuid: {deleted_uuid} that was linked to user ID: {user_id}",
             status=201,
+            headers=cors_headers,
         )
     except Exception as e:
-        return https_fn.Response(f"Error: {str(e)}", status=500)
+        return https_fn.Response(f"Error: {str(e)}", status=500, headers=cors_headers)

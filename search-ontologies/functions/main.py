@@ -35,12 +35,22 @@ def search_ontologies(req: https_fn.Request) -> https_fn.Response:
     Returns a list of all ontology nodes created by the user, and those whose is_public property is set to true.
     """
     try:
+        # CORS preflight
+        cors_headers = {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Max-Age": "3600",
+        }
+
+        if req.method == "OPTIONS":
+            return https_fn.Response("", status=204, headers=cors_headers)
 
         # Get Firebase Auth UID from headers
         auth_header = req.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return https_fn.Response(
-                "Missing or invalid Authorization header.", status=401
+                "Missing or invalid Authorization header.", status=401, headers=cors_headers
             )
         id_token = auth_header.split("Bearer ")[1]
 
@@ -49,7 +59,7 @@ def search_ontologies(req: https_fn.Request) -> https_fn.Response:
             decoded_token = auth.verify_id_token(id_token)
             user_uid = decoded_token["uid"]
         except Exception as e:
-            return https_fn.Response(f"Invalid token: {str(e)}", status=401)
+            return https_fn.Response(f"Invalid token: {str(e)}", status=401, headers=cors_headers)
 
         driver = get_neo4j_driver()
         with driver.session() as session:
@@ -87,8 +97,9 @@ def search_ontologies(req: https_fn.Request) -> https_fn.Response:
                 return https_fn.Response(
                     json.dumps(ontologies),
                     status=200,
+                    headers=cors_headers,
                 )
             except Exception as e:
-                return https_fn.Response(f"Error querying Neo4j: {str(e)}", status=500)
+                return https_fn.Response(f"Error querying Neo4j: {str(e)}", status=500, headers=cors_headers)
     except Exception as e:
-        return https_fn.Response(f"Error: {str(e)}", status=500)
+        return https_fn.Response(f"Error: {str(e)}", status=500, headers=cors_headers)

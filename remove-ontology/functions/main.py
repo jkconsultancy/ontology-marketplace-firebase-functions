@@ -38,17 +38,6 @@ def add_ontology(req: https_fn.Request) -> https_fn.Response:
     Also merges a node for the authenticated user and creates a relationship to the ontology.
     """
     try:
-        # CORS preflight
-        cors_headers = {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type",
-            "Access-Control-Max-Age": "3600",
-        }
-
-        if req.method == "OPTIONS":
-            return https_fn.Response("", status=204, headers=cors_headers)
-
         data = req.get_json(force=True)
         name = data.get("name")
         description = data.get("description")
@@ -61,7 +50,7 @@ def add_ontology(req: https_fn.Request) -> https_fn.Response:
         auth_header = req.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return https_fn.Response(
-                "Missing or invalid Authorization header.", status=401, headers=cors_headers
+                "Missing or invalid Authorization header.", status=401
             )
         id_token = auth_header.split("Bearer ")[1]
 
@@ -70,11 +59,11 @@ def add_ontology(req: https_fn.Request) -> https_fn.Response:
             decoded_token = auth.verify_id_token(id_token)
             user_uid = decoded_token["uid"]
         except Exception as e:
-            return https_fn.Response(f"Invalid token: {str(e)}", status=401, headers=cors_headers)
+            return https_fn.Response(f"Invalid token: {str(e)}", status=401)
 
         if not name or not description:
             return https_fn.Response(
-                "Missing 'name' or 'description' in payload.", status=400, headers=cors_headers
+                "Missing 'name' or 'description' in payload.", status=400
             )
 
         driver = get_neo4j_driver()
@@ -99,7 +88,6 @@ def add_ontology(req: https_fn.Request) -> https_fn.Response:
             return https_fn.Response(
                 f"Ontology node created with uuid: {created_uuid} and linked to user ID: {user_id}",
                 status=201,
-                headers=cors_headers,
             )
     except Exception as e:
-        return https_fn.Response(f"Error: {str(e)}", status=500, headers=cors_headers)
+        return https_fn.Response(f"Error: {str(e)}", status=500)

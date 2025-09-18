@@ -37,6 +37,17 @@ def update_ontology(req: https_fn.Request) -> https_fn.Response:
     Expects JSON payload with 'uuid', and 'properties' - dictionary of changes to make.
     """
     try:
+        # CORS preflight
+        cors_headers = {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Max-Age": "3600",
+        }
+
+        if req.method == "OPTIONS":
+            return https_fn.Response("", status=204, headers=cors_headers)
+
         data = req.get_json(force=True)
         uuid = data.get("uuid")
         properties = data.get("properties", {})
@@ -45,7 +56,7 @@ def update_ontology(req: https_fn.Request) -> https_fn.Response:
         auth_header = req.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return https_fn.Response(
-                "Missing or invalid Authorization header.", status=401
+                "Missing or invalid Authorization header.", status=401, headers=cors_headers
             )
         id_token = auth_header.split("Bearer ")[1]
 
@@ -54,11 +65,11 @@ def update_ontology(req: https_fn.Request) -> https_fn.Response:
             decoded_token = auth.verify_id_token(id_token)
             _ = decoded_token["uid"]
         except Exception as e:
-            return https_fn.Response(f"Invalid token: {str(e)}", status=401)
+            return https_fn.Response(f"Invalid token: {str(e)}", status=401, headers=cors_headers)
 
         if not uuid or not properties:
             return https_fn.Response(
-                "Missing 'uuid' or 'properties' in payload.", status=400
+                "Missing 'uuid' or 'properties' in payload.", status=400, headers=cors_headers
             )
 
         driver = get_neo4j_driver()
@@ -77,6 +88,7 @@ def update_ontology(req: https_fn.Request) -> https_fn.Response:
                 return https_fn.Response(
                     f"No ontology found with uuid: {uuid}",
                     status=404,
+                    headers=cors_headers,
                 )
             print(f"Record: {record}")
             uuid = record["o"]["uuid"]
@@ -85,6 +97,7 @@ def update_ontology(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response(
             f"Ontology node updated with uuid: {uuid} with properties: {props}",
             status=201,
+            headers=cors_headers,
         )
     except Exception as e:
-        return https_fn.Response(f"Error: {str(e)}", status=500)
+        return https_fn.Response(f"Error: {str(e)}", status=500, headers=cors_headers)
